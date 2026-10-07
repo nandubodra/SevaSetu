@@ -1,0 +1,304 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+
+type Language = 'en' | 'hi' | 'bn' | 'pa' | 'bho';
+
+type AppRecord = {
+  id: string;
+  citizenName: string;
+  serviceType: string;
+  status: string;
+  documents?: Record<string, string>;
+  formData?: Record<string, string>;
+  portalRef?: string;
+  createdAt?: string;
+  history?: Array<{ type: string; message: string; at?: string }>;
+};
+
+const languageLabels: Record<Language, string> = {
+  en: 'English',
+  hi: 'हिन्दी',
+  bn: 'বাংলা',
+  pa: 'ਪੰਜਾਬੀ',
+  bho: 'भोजपुरी',
+};
+
+export default function DashboardPage() {
+  const [language, setLanguage] = useState<Language>('en');
+  const [citizenName, setCitizenName] = useState('Aarav Verma');
+  const [userInput, setUserInput] = useState('Mujhe income certificate banana hai');
+  const [apps, setApps] = useState<AppRecord[]>([]);
+  const [currentApplication, setCurrentApplication] = useState<AppRecord | null>(null);
+  const [responseText, setResponseText] = useState('');
+  const [requirements, setRequirements] = useState<Array<{ key: string; label: string }>>([]);
+  const [documentForm, setDocumentForm] = useState<Record<string, string>>({});
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadApps = async () => {
+    const res = await fetch('/api/applications', { cache: 'no-store' });
+    const data = await res.json();
+    setApps(data);
+  };
+
+  useEffect(() => {
+    loadApps();
+  }, []);
+
+  const activeStatus = useMemo(() => {
+    if (!currentApplication) return 'idle';
+    return currentApplication.status;
+  }, [currentApplication]);
+
+  const submitRequest = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          citizenName,
+          message: userInput,
+          language,
+        }),
+      });
+      const json = await response.json();
+      setResponseText(json.response.message);
+      setCurrentApplication(json.application);
+      setRequirements(json.response.requirements || []);
+      setDocumentForm({});
+      setFormData({});
+      loadApps();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDocumentSubmit = async () => {
+    if (!currentApplication) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationId: currentApplication.id,
+          citizenName,
+          language,
+          documents: documentForm,
+        }),
+      });
+      const json = await response.json();
+      setResponseText(json.response.message);
+      setCurrentApplication(json.application);
+      setRequirements(json.response.requirements || []);
+      setDocumentForm({});
+      loadApps();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFormSubmit = async () => {
+    if (!currentApplication) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationId: currentApplication.id,
+          citizenName,
+          language,
+          formData,
+        }),
+      });
+      const json = await response.json();
+      setResponseText(json.response.message);
+      setCurrentApplication(json.application);
+      setFormData({});
+      setRequirements(json.response.requirements || []);
+      loadApps();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConsent = async (value: boolean) => {
+    if (!currentApplication) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationId: currentApplication.id,
+          citizenName,
+          language,
+          consent: value,
+        }),
+      });
+      const json = await response.json();
+      setResponseText(json.response.message);
+      setCurrentApplication(json.application);
+      loadApps();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <main className="dashboard-shell">
+      <aside className="sidebar">
+        <div className="brand-wrap">
+          <span className="brand-mark">S</span>
+          <span>SevaSetu</span>
+        </div>
+
+        <div className="language-panel">
+          <label>Language</label>
+          <div className="lang-row">
+            {(Object.keys(languageLabels) as Language[]).map((key) => (
+              <button
+                key={key}
+                className={language === key ? 'lang-btn active' : 'lang-btn'}
+                onClick={() => setLanguage(key)}
+              >
+                {languageLabels[key]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="user-card">
+          <label>Citizen</label>
+          <input value={citizenName} onChange={(e) => setCitizenName(e.target.value)} />
+        </div>
+
+        <div className="mini-panel">
+          <h4>AI Agent summary</h4>
+          <ul>
+            <li>Requirement understanding</li>
+            <li>Document validation</li>
+            <li>Consent enforcement</li>
+            <li>Mock submission & tracking</li>
+          </ul>
+        </div>
+      </aside>
+
+      <section className="main-panel">
+        <div className="top-row">
+          <h1>Citizen Service Workspace</h1>
+          <a href="/" className="secondary-btn small-btn">Home</a>
+        </div>
+
+        <div className="request-card">
+          <label>Request in {languageLabels[language]}</label>
+          <textarea
+            value={userInput}
+            onChange={(e) => setUserInput(e.target.value)}
+            rows={4}
+          />
+          <button className="primary-btn" onClick={submitRequest} disabled={isLoading}>
+            {isLoading ? 'Processing...' : 'Start AI workflow'}
+          </button>
+        </div>
+
+        {responseText ? (
+          <div className="response-card">
+            <h3>Agent response</h3>
+            <p>{responseText}</p>
+          </div>
+        ) : null}
+
+        {requirements.length > 0 && (
+          <div className="wizard-card">
+            <h3>Collect required documents</h3>
+            <div className="field-grid">
+              {requirements.map((req) => (
+                <div key={req.key} className="input-block">
+                  <label>{req.label}</label>
+                  <input
+                    value={documentForm[req.key] || ''}
+                    onChange={(e) =>
+                      setDocumentForm((prev) => ({ ...prev, [req.key]: e.target.value }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            <button className="primary-btn" onClick={handleDocumentSubmit} disabled={isLoading}>
+              Validate documents
+            </button>
+          </div>
+        )}
+
+        {activeStatus === 'form_pending' && (
+          <div className="wizard-card">
+            <h3>Complete application details</h3>
+            <div className="field-grid">
+              <div className="input-block">
+                <label>Applicant name</label>
+                <input value={formData.applicantName || citizenName} onChange={(e) => setFormData((prev) => ({ ...prev, applicantName: e.target.value }))} />
+              </div>
+              <div className="input-block">
+                <label>Address</label>
+                <input value={formData.address || ''} onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value }))} />
+              </div>
+              <div className="input-block">
+                <label>Mobile</label>
+                <input value={formData.mobile || ''} onChange={(e) => setFormData((prev) => ({ ...prev, mobile: e.target.value }))} />
+              </div>
+              <div className="input-block">
+                <label>Purpose</label>
+                <input value={formData.purpose || ''} onChange={(e) => setFormData((prev) => ({ ...prev, purpose: e.target.value }))} />
+              </div>
+            </div>
+            <button className="primary-btn" onClick={handleFormSubmit} disabled={isLoading}>
+              Save and continue
+            </button>
+          </div>
+        )}
+
+        {activeStatus === 'consent_pending' && (
+          <div className="wizard-card consent-box">
+            <h3>Citizen consent required</h3>
+            <p>Do you want SevaSetu to submit this application on the government portal?</p>
+            <div className="consent-row">
+              <button className="primary-btn" onClick={() => handleConsent(true)}>Yes, submit</button>
+              <button className="secondary-btn" onClick={() => handleConsent(false)}>No, cancel</button>
+            </div>
+          </div>
+        )}
+
+        {currentApplication && (
+          <div className="status-card">
+            <h3>Application status</h3>
+            <div className="status-rows">
+              <div><span>Application ID</span><strong>{currentApplication.id}</strong></div>
+              <div><span>Service</span><strong>{currentApplication.serviceType}</strong></div>
+              <div><span>Status</span><strong>{currentApplication.status}</strong></div>
+              <div><span>Portal Ref</span><strong>{currentApplication.portalRef || 'Not yet submitted'}</strong></div>
+            </div>
+          </div>
+        )}
+
+        <div className="list-card">
+          <h3>Recent citizen applications</h3>
+          <div className="application-list">
+            {apps.map((app) => (
+              <button key={app.id} className="app-row" onClick={() => setCurrentApplication(app)}>
+                <div>
+                  <strong>{app.citizenName}</strong>
+                  <span>{app.serviceType}</span>
+                </div>
+                <span className="pill">{app.status}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
